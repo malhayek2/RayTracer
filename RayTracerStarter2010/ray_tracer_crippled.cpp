@@ -16,10 +16,11 @@ using namespace std;
 #include "glut.h"
 #include "graphics.h"
 #include "vector.h"
+#include <algorithm>
 
 // Turn this to zero to see OpenGL draw the correct picture.
 // Turn it to one, and have your code ray-trace it the same way.
-#define RAY_TRACE 0
+#define RAY_TRACE 1
 
 
 class Sphere
@@ -101,17 +102,23 @@ void Scene::CalculateRightAndUp()
 	first_time = false; // don't need to do this again.
 
 	// Calculate Forward vector
-
+	forward = at - eye;
 	// Normalize Forward vector.
-
+	forward.Normalize();
 	// Right vector is Forward cross Up
-
+	right = CrossProduct(forward, up);
 	// Normalize Right vector.
-
+	right.Normalize();
 	// Reset Up vector to be Right cross Forward
-
+	up = CrossProduct(right, forward);
 	// Set World window corners to be a little in front of eye.
-
+	double u = tan(fov*3.1416 / 180 * 0.5);
+	double r = u * screen_x / screen_y;
+	ww_tr = eye + forward + u * up + r * right;
+	ww_tl = eye + forward + u * up - r * right;
+	ww_br = eye + forward - u * up + r * right;
+	ww_bl = eye + forward - u * up - r * right;
+	
 }
 
 // These are the calculations we did in class.
@@ -124,9 +131,18 @@ void Scene::CreateRay(int x, int y, Vector3 &ray)
 
 	// Calculate right_ratio and up_ratio.
 
+	double right_ratio = (double)x / (double)screen_x;
+	double up_ratio = (double)y / (double)screen_y;
+
 	// Calculate where x,y on the screen maps to on the WorldWindow (film.)
+	Point3 bottom_edge = AffineSum(ww_bl, ww_br, right_ratio);
+	Point3 top_edge = AffineSum(ww_tl, ww_tr, right_ratio);
+	Point3 F = AffineSum(bottom_edge, top_edge, up_ratio);
 
 	// Generate a ray from the eye to the film position.
+	ray = F - eye;
+
+	ray.Normalize();
 
 }
 
@@ -139,6 +155,40 @@ bool RayIntersectSphere(const Point3 &eye,
 						Vector3 &intersection_normal
 						)
 {
+	Vector3 eo = eye - s.origin;
+	double a = DotProduct(ray, ray);
+	double b = 2 * DotProduct(eo, ray);
+	double c = DotProduct(eo, eo) - s.radius * s.radius;
+	//check if the sphere is hit
+	double determinant = b * b - 4 * a * c;
+	if (determinant < 0) {
+		//sphere not hit
+		return false;
+	}
+
+	double t1 = (-b + sqrt(determinant)) / (2 * a);
+	//double t2 = (-b - sqrt(determinant)) / (2 * a);
+	// sphere behind eye
+	if (t1 < 0) {
+		return false;
+	}
+		
+
+	//double final = std::min(t1, t2);
+
+
+	
+	//intersection_point = eye + ray * final;
+	intersection_point.p[0] = eye.p[0] + ray.v[0] * t1;
+	intersection_point.p[1] = eye.p[1] + ray.v[1] * t1;
+	intersection_point.p[2] = eye.p[2] + ray.v[2] * t1;
+
+	intersection_normal = intersection_point - s.origin;
+	intersection_normal.Normalize();
+
+	return true;
+
+
 	return true;
 }
 
